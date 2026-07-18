@@ -120,7 +120,10 @@ func (c *Client) req(method, path string, body []byte, ctype string) (int, []byt
 func (c *Client) Get(path string) (any, error) {
 	code, data, _, err := c.req("GET", path, nil, "")
 	if err != nil {
-		return nil, err
+		return nil, classifyNetworkError(err)
+	}
+	if code >= 400 {
+		return nil, classifyError("GET", path, code, data)
 	}
 	if code != 200 {
 		return nil, fmt.Errorf("%s: HTTP %d — %s", path, code, snippet(data))
@@ -158,7 +161,14 @@ func (c *Client) Write(method, path string, form map[string]any) (int, []byte, h
 		}
 		body = []byte(v.Encode())
 	}
-	return c.req(method, full, body, "application/x-www-form-urlencoded; charset=UTF-8")
+	code, data, hdrs, err := c.req(method, full, body, "application/x-www-form-urlencoded; charset=UTF-8")
+	if err != nil {
+		return code, data, hdrs, classifyNetworkError(err)
+	}
+	if code >= 400 {
+		return code, data, hdrs, classifyError(method, path, code, data)
+	}
+	return code, data, hdrs, nil
 }
 
 // Raw performs a direct API call with no auto-btoken (used by `bbox raw`).
@@ -235,6 +245,7 @@ func (c *Client) LoadSession() bool {
 		cookies = append(cookies, ck)
 	}
 	c.jar.SetCookies(u, cookies)
+	sessionWasLoaded = true
 	return true
 }
 

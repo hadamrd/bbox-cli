@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -18,10 +19,22 @@ var (
 	jsonOut      bool
 	showSecrets  bool
 	passwordFile string
+	cfgFile      string
 
 	// bx is the shared Client instance. Constructed on Execute.
 	bx *client.Client
 )
+
+// configKeys lists every config-file key with its type and default. Used by
+// `bbox config show` and `bbox config init`.
+var configKeys = []struct {
+	Key, Type, Default, Comment string
+}{
+	{"verbose", "bool", "false", "print HTTP calls to stderr"},
+	{"show_secrets", "bool", "false", "reveal WiFi passphrases / DynDNS passwords in human output"},
+	{"password_file", "string", "", "path to router-password file (empty = env BBOX_PASSWORD then ~/.bbox-password)"},
+	{"json", "bool", "false", "emit JSON for read commands (scriptable)"},
+}
 
 // Build-time metadata; overridden via -ldflags.
 var (
@@ -65,19 +78,71 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", fmt.Sprintf("config file (default: %s)", defaultConfigPath()))
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print HTTP calls to stderr")
 	rootCmd.PersistentFlags().BoolVar(&jsonOut, "json", false, "emit JSON for read commands (scriptable)")
 	rootCmd.PersistentFlags().BoolVar(&showSecrets, "show-secrets", false, "reveal secrets (WiFi passphrases, DynDNS passwords) in human output")
 	rootCmd.PersistentFlags().StringVar(&passwordFile, "password-file", "",
 		fmt.Sprintf("path to password file (default: env BBOX_PASSWORD, then %s)", client.PasswordFileDefault()))
 
-	_ = viper.BindPFlag("password-file", rootCmd.PersistentFlags().Lookup("password-file"))
+	// viper key names use underscores to match the YAML file.
+	_ = viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
+	_ = viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json"))
+	_ = viper.BindPFlag("show_secrets", rootCmd.PersistentFlags().Lookup("show-secrets"))
+	_ = viper.BindPFlag("password_file", rootCmd.PersistentFlags().Lookup("password-file"))
+
 	viper.SetEnvPrefix("BBOX")
+	// Map underscored config keys to BBOX_* env vars 1:1 (BBOX_SHOW_SECRETS, BBOX_PASSWORD_FILE).
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
 }
 
+// defaultConfigPath returns $HOME/.bbox.yaml.
+func defaultConfigPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".bbox.yaml")
+}
+
+// initConfig loads the config file, if any, and applies its values to the
+// package-level vars (viper alone doesn't set them because cobra already bound
+// the flags to the vars). Precedence: flag > env > file > default is preserved
+// because viper.GetX() already respects that layering internally.
 func initConfig() {
-	// Nothing config-file-based; viper is used only for env/flag layering.
+	path := cfgFile
+	if path == "" {
+		path = defaultConfigPath()
+	}
+	viper.SetConfigFile(path)
+	viper.SetConfigType("yaml")
+
+	if err := viper.ReadInConfig(); err != nil {
+		// A missing file is silent (even with an explicit --config PATH — the
+		// `config init` subcommand relies on this).
+		if _, isNotFound := err.(viper.ConfigFileNotFoundError); isNotFound {
+			return
+		}
+		if os.IsNotExist(err) {
+			return
+		}
+		// The file exists but has a parse error — warn and continue with defaults.
+		fmt.Fprintf(os.Stderr, "warning: parse %s: %v — continuing with defaults\n", path, err)
+		return
+	}
+
+	// Push file/env values back into the flag-bound vars only when the flag
+	// itself was NOT set on the CLI (flag wins).
+	if !rootCmd.PersistentFlags().Changed("verbose") {
+		verbose = viper.GetBool("verbose")
+	}
+	if !rootCmd.PersistentFlags().Changed("json") {
+		jsonOut = viper.GetBool("json")
+	}
+	if !rootCmd.PersistentFlags().Changed("show-secrets") {
+		showSecrets = viper.GetBool("show_secrets")
+	}
+	if !rootCmd.PersistentFlags().Changed("password-file") {
+		passwordFile = viper.GetString("password_file")
+	}
 }
 
 // clientOnce builds bx lazily so --help doesn't touch the network.

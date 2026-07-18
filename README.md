@@ -75,6 +75,34 @@ bbox raw GET /api/v1/summary
 bbox raw PUT /api/v1/dyndns --body 'enable=1'
 ```
 
+## Configuration
+
+Persistent settings live in `~/.bbox.yaml` (override with `--config PATH`).
+Effective precedence, highest wins:
+
+    CLI flag  >  BBOX_* env var  >  config file  >  built-in default
+
+Supported keys (all optional):
+
+| Key              | Type   | Env                    | Default | Meaning |
+| ---------------- | ------ | ---------------------- | ------- | ------- |
+| `verbose`        | bool   | `BBOX_VERBOSE`         | `false` | Print HTTP calls to stderr. |
+| `show_secrets`   | bool   | `BBOX_SHOW_SECRETS`    | `false` | Reveal WiFi / DynDNS secrets in human output. |
+| `password_file`  | string | `BBOX_PASSWORD_FILE`   | `""`    | Password file path (see Authentication). |
+| `json`           | bool   | `BBOX_JSON`            | `false` | Emit JSON for read commands (scriptable). |
+
+Bootstrap and inspect:
+
+```bash
+bbox config init          # write a commented example to ~/.bbox.yaml
+bbox config show          # print each key + where its value came from
+bbox --config ./ci.yaml status
+```
+
+A missing default file is silent; a broken file prints a warning to stderr and
+the CLI keeps running with defaults (so you can still run `bbox logout` or
+`bbox session-import`).
+
 ## Command reference
 
 | Group       | Commands                                                                       |
