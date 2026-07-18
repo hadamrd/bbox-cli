@@ -126,12 +126,37 @@ func (c *Client) Parental() (map[string]any, error) {
 	}
 	return unwrap(m, "parentalcontrol"), nil
 }
-func (c *Client) Notifications() (map[string]any, error) {
-	m, err := c.GetFirst("/api/v1/notification")
+
+// Notifications returns the parsed /api/v1/notification body as-is. The
+// firmware sometimes returns an array of entries, sometimes an object with a
+// "notification" key — callers must handle both shapes.
+func (c *Client) Notifications() (any, error) {
+	return c.Get("/api/v1/notification")
+}
+
+// NotificationsClear tries the collective DELETE first; if that 404s the caller
+// is expected to fall back to per-id deletion.
+func (c *Client) NotificationsClear() error {
+	code, data, _, err := c.Write("DELETE", "/api/v1/notification", nil)
 	if err != nil {
-		return map[string]any{}, nil
+		return err
 	}
-	return unwrap(m, "notification"), nil
+	if code == 200 || code == 204 {
+		return nil
+	}
+	return fmt.Errorf("notification_clear: HTTP %d — %s", code, snippet(data))
+}
+
+// NotificationDel deletes a single notification by id.
+func (c *Client) NotificationDel(id int) error {
+	code, data, _, err := c.Write("DELETE", fmt.Sprintf("/api/v1/notification/%d", id), nil)
+	if err != nil {
+		return err
+	}
+	if code == 200 || code == 204 {
+		return nil
+	}
+	return fmt.Errorf("notification_del(%d): HTTP %d — %s", id, code, snippet(data))
 }
 func (c *Client) Hibernate() (map[string]any, error) {
 	m, err := c.GetFirst("/api/v1/hibernate/scheduler")
@@ -537,6 +562,16 @@ func (c *Client) WifiScheduler() (map[string]any, error) {
 		return map[string]any{}, nil
 	}
 	return unwrap(unwrap(m, "wireless"), "scheduler"), nil
+}
+func (c *Client) WifiSchedulerOff() error {
+	code, data, _, err := c.Write("PUT", "/api/v1/wireless/scheduler", map[string]any{"enable": 0})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("wifi_scheduler_off: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
 }
 
 func (c *Client) WifiBandToggle(band string, enable bool) error {

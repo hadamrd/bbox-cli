@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -193,6 +195,7 @@ var statsCmd = &cobra.Command{
 
 var exportFile string
 var exportDiffPath string
+var exportSnapshot bool
 var exportCmd = &cobra.Command{
 	Use:   "export-config",
 	Short: "dump the entire router state to JSON (or diff against a saved snapshot with --diff)",
@@ -239,6 +242,17 @@ var exportCmd = &cobra.Command{
 			return nil
 		}
 		b, _ := json.MarshalIndent(out, "", "  ")
+		if exportSnapshot {
+			if exportFile != "" {
+				fmt.Fprintln(os.Stderr, "warning: --file was ignored (--snapshot took precedence)")
+			}
+			path, err := writeSnapshot(b)
+			if err != nil {
+				return err
+			}
+			fmt.Println(path)
+			return nil
+		}
 		if exportFile != "" {
 			if err := os.WriteFile(exportFile, b, 0644); err != nil {
 				return err
@@ -251,9 +265,29 @@ var exportCmd = &cobra.Command{
 	},
 }
 
+// writeSnapshot dumps the export blob to ~/.bbox-snapshots/YYYYMMDD-HHMMSS.json,
+// creating the directory on demand. Returns the absolute path written.
+func writeSnapshot(b []byte) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".bbox-snapshots")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	name := time.Now().UTC().Format("20060102-150405") + ".json"
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, b, 0644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 func init() {
 	exportCmd.Flags().StringVarP(&exportFile, "file", "o", "", "write to file instead of stdout")
 	exportCmd.Flags().StringVar(&exportDiffPath, "diff", "", "compare current state against this saved JSON export and print a semantic diff")
+	exportCmd.Flags().BoolVar(&exportSnapshot, "snapshot", false, "write export to ~/.bbox-snapshots/YYYYMMDD-HHMMSS.json and print the path (drift-tracking friendly)")
 	rootCmd.AddCommand(statusCmd, infoCmd, wanIPCmd, logClearCmd, statsCmd, exportCmd)
 }
 
