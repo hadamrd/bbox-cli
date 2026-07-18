@@ -60,7 +60,7 @@ func TestLoadSessionPythonFixture(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".bbox-session.json"), blob, 0600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
-	c := New(false)
+	c := New(false, 0, 0)
 	if !c.LoadSession() {
 		t.Fatal("LoadSession returned false for valid Python-format fixture")
 	}
@@ -88,7 +88,7 @@ func TestLoadSessionExpired(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".bbox-session.json"), blob, 0600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
-	c := New(false)
+	c := New(false, 0, 0)
 	if c.LoadSession() {
 		t.Fatal("LoadSession returned true for expired session; expected false")
 	}

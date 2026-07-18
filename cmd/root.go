@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/hadamrd/bbox-cli/internal/client"
 	"github.com/spf13/cobra"
@@ -20,6 +21,8 @@ var (
 	showSecrets  bool
 	passwordFile string
 	cfgFile      string
+	retries      int
+	timeoutStr   string
 
 	// bx is the shared Client instance. Constructed on Execute.
 	bx *client.Client
@@ -34,6 +37,8 @@ var configKeys = []struct {
 	{"show_secrets", "bool", "false", "reveal WiFi passphrases / DynDNS passwords in human output"},
 	{"password_file", "string", "", "path to router-password file (empty = env BBOX_PASSWORD then ~/.bbox-password)"},
 	{"json", "bool", "false", "emit JSON for read commands (scriptable)"},
+	{"retries", "int", "2", "transient-error retries with exponential backoff (500ms, 1s, 2s...)"},
+	{"timeout", "string", "15s", "per-request HTTP timeout (Go duration; e.g. 30s, 2m)"},
 }
 
 // Build-time metadata; overridden via -ldflags.
@@ -84,12 +89,16 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&showSecrets, "show-secrets", false, "reveal secrets (WiFi passphrases, DynDNS passwords) in human output")
 	rootCmd.PersistentFlags().StringVar(&passwordFile, "password-file", "",
 		fmt.Sprintf("path to password file (default: env BBOX_PASSWORD, then %s)", client.PasswordFileDefault()))
+	rootCmd.PersistentFlags().IntVar(&retries, "retries", 2, "retry transient network errors N times (exp backoff)")
+	rootCmd.PersistentFlags().StringVar(&timeoutStr, "timeout", "15s", "per-request HTTP timeout (Go duration)")
 
 	// viper key names use underscores to match the YAML file.
 	_ = viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 	_ = viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json"))
 	_ = viper.BindPFlag("show_secrets", rootCmd.PersistentFlags().Lookup("show-secrets"))
 	_ = viper.BindPFlag("password_file", rootCmd.PersistentFlags().Lookup("password-file"))
+	_ = viper.BindPFlag("retries", rootCmd.PersistentFlags().Lookup("retries"))
+	_ = viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout"))
 
 	viper.SetEnvPrefix("BBOX")
 	// Map underscored config keys to BBOX_* env vars 1:1 (BBOX_SHOW_SECRETS, BBOX_PASSWORD_FILE).
@@ -143,12 +152,34 @@ func initConfig() {
 	if !rootCmd.PersistentFlags().Changed("password-file") {
 		passwordFile = viper.GetString("password_file")
 	}
+	if !rootCmd.PersistentFlags().Changed("retries") {
+		retries = viper.GetInt("retries")
+	}
+	if !rootCmd.PersistentFlags().Changed("timeout") {
+		if s := viper.GetString("timeout"); s != "" {
+			timeoutStr = s
+		}
+	}
+}
+
+// parseTimeout converts the --timeout string to a duration. Invalid input
+// falls back to 15s with a warning to stderr.
+func parseTimeout() time.Duration {
+	if timeoutStr == "" {
+		return 15 * time.Second
+	}
+	d, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: invalid --timeout %q (%v) — using 15s\n", timeoutStr, err)
+		return 15 * time.Second
+	}
+	return d
 }
 
 // clientOnce builds bx lazily so --help doesn't touch the network.
 func c() *client.Client {
 	if bx == nil {
-		bx = client.New(verbose)
+		bx = client.New(verbose, retries, parseTimeout())
 	}
 	return bx
 }

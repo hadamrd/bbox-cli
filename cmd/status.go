@@ -192,9 +192,10 @@ var statsCmd = &cobra.Command{
 }
 
 var exportFile string
+var exportDiffPath string
 var exportCmd = &cobra.Command{
 	Use:   "export-config",
-	Short: "dump the entire router state to JSON",
+	Short: "dump the entire router state to JSON (or diff against a saved snapshot with --diff)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
 			return err
@@ -222,6 +223,21 @@ var exportCmd = &cobra.Command{
 				out[p] = v
 			}
 		}
+		// --diff mode: don't emit the export; print the diff vs the saved snapshot.
+		if exportDiffPath != "" {
+			prev, err := readExportFile(exportDiffPath)
+			if err != nil {
+				return err
+			}
+			rep := diffExports(prev, out)
+			if jsonOut {
+				b, _ := json.MarshalIndent(rep, "", "  ")
+				fmt.Println(string(b))
+			} else {
+				printDiffHuman(rep)
+			}
+			return nil
+		}
 		b, _ := json.MarshalIndent(out, "", "  ")
 		if exportFile != "" {
 			if err := os.WriteFile(exportFile, b, 0644); err != nil {
@@ -237,6 +253,7 @@ var exportCmd = &cobra.Command{
 
 func init() {
 	exportCmd.Flags().StringVarP(&exportFile, "file", "o", "", "write to file instead of stdout")
+	exportCmd.Flags().StringVar(&exportDiffPath, "diff", "", "compare current state against this saved JSON export and print a semantic diff")
 	rootCmd.AddCommand(statusCmd, infoCmd, wanIPCmd, logClearCmd, statsCmd, exportCmd)
 }
 

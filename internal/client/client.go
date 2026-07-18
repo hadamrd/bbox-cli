@@ -52,48 +52,47 @@ func WANHistoryFile() string {
 // Client is the transport wrapper. Mirrors Python `Bbox` class.
 type Client struct {
 	Verbose      bool
+	Retries      int // max retry attempts on transient network errors (default 0 = no retry)
 	http         *http.Client
 	jar          http.CookieJar
 	token        string
 	tokenExpires time.Time
+	// sleep is the backoff sleep, overridable in tests.
+	sleep func(time.Duration)
 }
 
 // New constructs a Client with an InsecureSkipVerify HTTPS transport (Bbox is self-signed).
-func New(verbose bool) *Client {
+// retries=0 disables retry; timeout<=0 falls back to 15s.
+func New(verbose bool, retries int, timeout time.Duration) *Client {
 	jar, _ := cookiejar.New(nil)
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	if retries < 0 {
+		retries = 0
+	}
 	return &Client{
 		Verbose: verbose,
+		Retries: retries,
 		jar:     jar,
 		http: &http.Client{
 			Transport: tr,
 			Jar:       jar,
-			Timeout:   15 * time.Second,
+			Timeout:   timeout,
 		},
+		sleep: time.Sleep,
 	}
 }
 
-// req sends a raw HTTP request with the mandatory Bbox headers.
+// req sends a raw HTTP request with the mandatory Bbox headers. Retries on
+// transport-layer errors (DNS, TCP refused, EOF, TLS handshake) up to
+// c.Retries times with exponential backoff (500ms, 1s, 2s...). HTTP status
+// codes (incl. 5xx) are never retried — they are semantically final.
 func (c *Client) req(method, path string, body []byte, ctype string) (int, []byte, http.Header, error) {
 	u := BaseURL + path
-	var rdr io.Reader
-	if body != nil {
-		rdr = strings.NewReader(string(body))
-	}
-	req, err := http.NewRequest(method, u, rdr)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("X-Requested-With", "XmlHttpRequest")
-	req.Header.Set("Origin", BaseURL)
-	req.Header.Set("Referer", BaseURL+"/login")
-	if body != nil {
-		req.Header.Set("Content-Type", ctype)
-	}
 	if c.Verbose {
 		fmt.Fprintf(os.Stderr, "-> %s %s\n", method, u)
 		if body != nil {
@@ -104,16 +103,49 @@ func (c *Client) req(method, path string, body []byte, ctype string) (int, []byt
 			fmt.Fprintf(os.Stderr, "   body: %s\n", s)
 		}
 	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return 0, nil, nil, err
+	var lastErr error
+	for attempt := 0; attempt <= c.Retries; attempt++ {
+		var rdr io.Reader
+		if body != nil {
+			rdr = strings.NewReader(string(body))
+		}
+		req, err := http.NewRequest(method, u, rdr)
+		if err != nil {
+			return 0, nil, nil, err
+		}
+		req.Header.Set("User-Agent", UserAgent)
+		req.Header.Set("Accept", "*/*")
+		req.Header.Set("X-Requested-With", "XmlHttpRequest")
+		req.Header.Set("Origin", BaseURL)
+		req.Header.Set("Referer", BaseURL+"/login")
+		if body != nil {
+			req.Header.Set("Content-Type", ctype)
+		}
+		resp, err := c.http.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt < c.Retries {
+				backoff := time.Duration(500<<attempt) * time.Millisecond
+				if c.Verbose {
+					fmt.Fprintf(os.Stderr, "   retry %d/%d after %v: %v\n", attempt+1, c.Retries, backoff, err)
+				}
+				if c.sleep != nil {
+					c.sleep(backoff)
+				} else {
+					time.Sleep(backoff)
+				}
+				continue
+			}
+			return 0, nil, nil, err
+		}
+		data, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if c.Verbose {
+			fmt.Fprintf(os.Stderr, "<- %d (%dB)\n", resp.StatusCode, len(data))
+		}
+		return resp.StatusCode, data, resp.Header, nil
 	}
-	defer resp.Body.Close()
-	data, _ := io.ReadAll(resp.Body)
-	if c.Verbose {
-		fmt.Fprintf(os.Stderr, "<- %d (%dB)\n", resp.StatusCode, len(data))
-	}
-	return resp.StatusCode, data, resp.Header, nil
+	return 0, nil, nil, lastErr
 }
 
 // Get performs a JSON GET and unmarshals the response into any.

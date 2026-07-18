@@ -18,12 +18,16 @@ func resetForTest(t *testing.T) {
 	_ = viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json"))
 	_ = viper.BindPFlag("show_secrets", rootCmd.PersistentFlags().Lookup("show-secrets"))
 	_ = viper.BindPFlag("password_file", rootCmd.PersistentFlags().Lookup("password-file"))
+	_ = viper.BindPFlag("retries", rootCmd.PersistentFlags().Lookup("retries"))
+	_ = viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout"))
 	verbose = false
 	jsonOut = false
 	showSecrets = false
 	passwordFile = ""
+	retries = 2
+	timeoutStr = "15s"
 	// Clear "Changed" flags — cobra records these globally on the parent command.
-	for _, name := range []string{"verbose", "json", "show-secrets", "password-file", "config"} {
+	for _, name := range []string{"verbose", "json", "show-secrets", "password-file", "config", "retries", "timeout"} {
 		if f := rootCmd.PersistentFlags().Lookup(name); f != nil {
 			f.Changed = false
 		}
