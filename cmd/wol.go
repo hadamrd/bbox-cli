@@ -83,7 +83,7 @@ host is used.`,
 		if err != nil {
 			return fmt.Errorf("udp dial: %w", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		for i := 0; i < wolRepeat; i++ {
 			if _, err := conn.Write(pkt); err != nil {
