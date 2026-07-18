@@ -170,15 +170,49 @@ var logClearCmd = &cobra.Command{
 	},
 }
 
+var (
+	statsHistoryPath string
+	statsGraph       bool
+	statsSamples     int
+)
+
 var statsCmd = &cobra.Command{
 	Use:   "stats",
-	Short: "WAN/LAN traffic counters",
+	Short: "WAN/LAN traffic counters (with --graph for ASCII sparklines)",
+	Long: `Dump WAN/LAN traffic counters. Pass --history to append one JSONL sample
+per invocation (default ~/.bbox-stats.jsonl), suitable for a per-minute cron.
+Pass --graph to skip the live scrape and instead render an ASCII sparkline
+from the tail of the history file.`,
+	Example: `  # One-shot dump
+  bbox stats
+
+  # Append a sample to the default history file (cron-friendly)
+  bbox stats --history ~/.bbox-stats.jsonl
+
+  # Render the last 60 samples as a sparkline
+  bbox stats --graph`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if statsGraph {
+			return runStatsGraph()
+		}
 		if err := ensureAuth(); err != nil {
 			return err
 		}
 		wanS, _ := c().WANStats()
 		lanS, _ := c().LANStats()
+		// Always append a sample: path defaults to ~/.bbox-stats.jsonl.
+		{
+			rx, tx := extractWANBytes(wanS)
+			path := statsHistoryPath
+			if path == "" {
+				path = defaultHistoryPath()
+			}
+			if path != "" {
+				if err := appendStatsSample(path, statsSample{At: nowUTCRFC3339(), RxBytes: rx, TxBytes: tx}); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: history append failed: %v\n", err)
+				}
+			}
+		}
 		payload := map[string]any{"wan_stats": wanS, "lan_stats": lanS}
 		if emit(payload) {
 			return nil
@@ -191,6 +225,45 @@ var statsCmd = &cobra.Command{
 		fmt.Println(string(b))
 		return nil
 	},
+}
+
+// runStatsGraph reads the JSONL history file and renders sparklines from the
+// tail. Refuses to run without at least 2 samples.
+func runStatsGraph() error {
+	path := statsHistoryPath
+	if path == "" {
+		path = defaultHistoryPath()
+	}
+	if path == "" {
+		return fmt.Errorf("no history path (set --history or ensure $HOME is defined)")
+	}
+	samples, err := readStatsHistory(path, statsSamples)
+	if err != nil {
+		return fmt.Errorf("read history %s: %w", path, err)
+	}
+	if len(samples) < 2 {
+		return fmt.Errorf("history %s has only %d sample(s); need >= 2 for a graph", path, len(samples))
+	}
+	if jsonOut {
+		rx := make([]int64, len(samples))
+		tx := make([]int64, len(samples))
+		for i, s := range samples {
+			rx[i] = s.RxBytes
+			tx[i] = s.TxBytes
+		}
+		rxMin, rxMax := minMax(rx)
+		txMin, txMax := minMax(tx)
+		out := map[string]any{
+			"samples":  samples,
+			"rx_range": []int64{rxMin, rxMax},
+			"tx_range": []int64{txMin, txMax},
+		}
+		b, _ := json.MarshalIndent(out, "", "  ")
+		fmt.Println(string(b))
+		return nil
+	}
+	fmt.Print(renderStatsGraph(samples))
+	return nil
 }
 
 var exportFile string
@@ -301,6 +374,9 @@ func init() {
 	exportCmd.Flags().StringVarP(&exportFile, "file", "o", "", "write to file instead of stdout")
 	exportCmd.Flags().StringVar(&exportDiffPath, "diff", "", "compare current state against this saved JSON export and print a semantic diff")
 	exportCmd.Flags().BoolVar(&exportSnapshot, "snapshot", false, "write export to ~/.bbox-snapshots/YYYYMMDD-HHMMSS.json and print the path (drift-tracking friendly)")
+	statsCmd.Flags().StringVar(&statsHistoryPath, "history", "", "append one JSONL sample per invocation (default ~/.bbox-stats.jsonl if set)")
+	statsCmd.Flags().BoolVar(&statsGraph, "graph", false, "read history and render ASCII sparklines instead of scraping")
+	statsCmd.Flags().IntVar(&statsSamples, "samples", 60, "tail size for --graph")
 	rootCmd.AddCommand(statusCmd, infoCmd, wanIPCmd, logClearCmd, statsCmd, exportCmd)
 }
 
