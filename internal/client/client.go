@@ -172,9 +172,12 @@ func (c *Client) Raw(method, path string, body string) (int, []byte, http.Header
 
 // ── session ─────────────────────────────────────────────────────────────────
 
+// sessionEntry mirrors the Python bbox.py session file. Python writes
+// `expires` via datetime.timestamp() which is a float; accept it as float64
+// so on-disk sessions round-trip between the two implementations.
 type sessionEntry struct {
-	Value   string  `json:"value"`
-	Expires *int64  `json:"expires"`
+	Value   string   `json:"value"`
+	Expires *float64 `json:"expires"`
 }
 
 // SaveSession writes the cookie jar to the session file (Python-compatible layout).
@@ -182,9 +185,9 @@ func (c *Client) SaveSession() error {
 	u, _ := url.Parse(BaseURL)
 	out := map[string]sessionEntry{}
 	for _, ck := range c.jar.Cookies(u) {
-		var exp *int64
+		var exp *float64
 		if !ck.Expires.IsZero() {
-			e := ck.Expires.Unix()
+			e := float64(ck.Expires.Unix())
 			exp = &e
 		}
 		out[ck.Name] = sessionEntry{Value: ck.Value, Expires: exp}
@@ -212,7 +215,7 @@ func (c *Client) LoadSession() bool {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return false
 	}
-	now := time.Now().Unix()
+	now := float64(time.Now().Unix())
 	u, _ := url.Parse(BaseURL)
 	var cookies []*http.Cookie
 	for name, meta := range raw {
@@ -227,7 +230,7 @@ func (c *Client) LoadSession() bool {
 			Secure: true,
 		}
 		if meta.Expires != nil {
-			ck.Expires = time.Unix(*meta.Expires, 0)
+			ck.Expires = time.Unix(int64(*meta.Expires), 0)
 		}
 		cookies = append(cookies, ck)
 	}
