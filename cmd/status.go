@@ -39,11 +39,11 @@ var statusCmd = &cobra.Command{
 			fw = dev["firmware"]
 		}
 		printKV([][2]any{
-			{"model", dev["modelname"]},
-			{"serial", dev["serialnumber"]},
-			{"firmware", fw},
-			{"uptime (boots)", dev["numberofboots"]},
-			{"now", dev["now"]},
+			{"model", dash(dev["modelname"])},
+			{"serial", dash(dev["serialnumber"])},
+			{"firmware", dash(fw)},
+			{"uptime (boots)", dash(dev["numberofboots"])},
+			{"now", dash(dev["now"])},
 		})
 		fmt.Println("\nWAN")
 		portRange := toStr(ip["portrange"])
@@ -56,7 +56,7 @@ var statusCmd = &cobra.Command{
 			{"mac", firstNonEmpty(ip["mac"], "?")},
 			{"port range", portRange},
 			{"MAP-T", fmtBool(ip["maptenable"])},
-			{"CGNAT flag", ip["cgnatenable"]},
+			{"CGNAT flag", dash(ip["cgnatenable"])},
 		})
 		fmt.Println("\nServices")
 		for name, metaAny := range svc {
@@ -73,7 +73,7 @@ var statusCmd = &cobra.Command{
 				nbStr = fmt.Sprintf("%v", nbrules)
 			}
 			fmt.Printf("  %-15s  enable=%s  status=%v  rules=%s\n",
-				name, fmtBool(meta["enable"]), meta["status"], nbStr)
+				name, fmtBool(meta["enable"]), dash(meta["status"]), nbStr)
 		}
 		return nil
 	},

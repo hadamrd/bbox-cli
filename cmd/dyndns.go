@@ -25,11 +25,17 @@ var dyndnsShowCmd = &cobra.Command{
 		if hn == "" {
 			hn = "-"
 		}
+		pw, redacted := redact(d["password"])
 		printKV([][2]any{
 			{"enable", fmtBool(d["enable"])},
-			{"state", d["state"]},
+			{"state", dash(d["state"])},
 			{"hostname", hn},
+			{"username", dash(d["username"])},
+			{"password", pw},
 		})
+		if redacted {
+			fmt.Println("  (use --show-secrets to reveal)")
+		}
 		fmt.Println("\nSupported providers:")
 		if arr, ok := d["servercapabilities"].([]any); ok {
 			for _, x := range arr {

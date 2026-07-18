@@ -50,10 +50,10 @@ var natListCmd = &cobra.Command{
 }
 
 var (
-	natAddInternalPort   int
-	natAddProtocol       string
-	natAddRemoteIP       string
-	natAddSkipPortCheck  bool
+	natAddInternalPort  int
+	natAddProtocol      string
+	natAddRemoteIP      string
+	natAddSkipPortCheck bool
 )
 var natAddCmd = &cobra.Command{
 	Use:   "add NAME EXTERNAL_PORT TARGET_IP",

@@ -48,7 +48,7 @@ func asList(v any) []any {
 
 // ─── READ endpoints ────────────────────────────────────────────────────────
 
-func (c *Client) Summary() (map[string]any, error)  { return c.GetFirst("/api/v1/summary") }
+func (c *Client) Summary() (map[string]any, error) { return c.GetFirst("/api/v1/summary") }
 func (c *Client) Device() (map[string]any, error) {
 	m, err := c.GetFirst("/api/v1/device")
 	if err != nil {
@@ -485,6 +485,37 @@ func (c *Client) WifiBand(band string) (map[string]any, error) {
 }
 func (c *Client) WifiGuest() (map[string]any, error) {
 	return c.GetFirst("/api/v1/wireless/guest")
+}
+
+// GuestEnable returns {"enable": <0|1>, "radiostatus": <0|1>} for the guest
+// WiFi. The plain `/wireless/guest` endpoint only carries SSID/passphrase; the
+// on/off state lives on `/wireless/guestenable`.
+func (c *Client) GuestEnable() (map[string]any, error) {
+	m, err := c.GetFirst("/api/v1/wireless/guestenable")
+	if err != nil {
+		return map[string]any{}, nil
+	}
+	return unwrap(unwrap(m, "wireless"), "guest"), nil
+}
+func (c *Client) GuestKeySet(key string) error {
+	code, data, _, err := c.Write("PUT", "/api/v1/wireless/guest", map[string]any{"passphrase": key})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("guest_key_set: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
+}
+func (c *Client) GuestSSIDSet(ssid string) error {
+	code, data, _, err := c.Write("PUT", "/api/v1/wireless/guest", map[string]any{"ssid": ssid})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("guest_ssid_set: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
 }
 func (c *Client) WifiWPS() (map[string]any, error) {
 	m, err := c.GetFirst("/api/v1/wireless/wps")

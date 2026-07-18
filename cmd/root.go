@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/hadamrd/bbox-cli/internal/client"
@@ -15,15 +16,29 @@ import (
 var (
 	verbose      bool
 	jsonOut      bool
+	showSecrets  bool
 	passwordFile string
 
 	// bx is the shared Client instance. Constructed on Execute.
 	bx *client.Client
 )
 
+// Build-time metadata; overridden via -ldflags.
+var (
+	Version   = "dev"
+	Commit    = "none"
+	BuildDate = "unknown"
+)
+
+// versionLine renders the one-liner used by `bbox version` and `--version`.
+func versionLine() string {
+	return fmt.Sprintf("bbox %s (%s, built %s) %s", Version, Commit, BuildDate, runtime.Version())
+}
+
 var rootCmd = &cobra.Command{
-	Use:   "bbox",
-	Short: "CLI for Bouygues Bbox admin (reversed from mabbox.bytel.fr on 2026-07-17).",
+	Use:     "bbox",
+	Version: "placeholder", // replaced in Execute() with versionLine()
+	Short:   "CLI for Bouygues Bbox admin (reversed from mabbox.bytel.fr on 2026-07-17).",
 	Long: `bbox — CLI for Bouygues Bbox admin (reversed from mabbox.bytel.fr on 2026-07-17).
 
 Auth:
@@ -40,6 +55,8 @@ ports unless --skip-port-check.`,
 
 // Execute is the entry point called by main.go.
 func Execute() {
+	rootCmd.Version = versionLine()
+	rootCmd.SetVersionTemplate("{{.Version}}\n")
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(2)
@@ -50,6 +67,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print HTTP calls to stderr")
 	rootCmd.PersistentFlags().BoolVar(&jsonOut, "json", false, "emit JSON for read commands (scriptable)")
+	rootCmd.PersistentFlags().BoolVar(&showSecrets, "show-secrets", false, "reveal secrets (WiFi passphrases, DynDNS passwords) in human output")
 	rootCmd.PersistentFlags().StringVar(&passwordFile, "password-file", "",
 		fmt.Sprintf("path to password file (default: env BBOX_PASSWORD, then %s)", client.PasswordFileDefault()))
 
@@ -181,4 +199,35 @@ func getMap(m map[string]any, k string) map[string]any {
 		return v
 	}
 	return map[string]any{}
+}
+
+// dash returns "-" for nil/empty values instead of Go's default `<nil>`.
+func dash(v any) any {
+	if v == nil {
+		return "-"
+	}
+	if s, ok := v.(string); ok && s == "" {
+		return "-"
+	}
+	return v
+}
+
+// redactedMask is the fixed-length placeholder used by the human output when
+// --show-secrets is not set. Length is constant so tables stay aligned.
+const redactedMask = "******************"
+
+// redact returns the mask (and true) unless --show-secrets is set. `v` is
+// returned unchanged (and false) when nothing was redacted or the value was
+// empty/nil (empty passphrases render as "-").
+func redact(v any) (any, bool) {
+	if showSecrets {
+		return v, false
+	}
+	if v == nil {
+		return "-", false
+	}
+	if s, ok := v.(string); ok && s == "" {
+		return "-", false
+	}
+	return redactedMask, true
 }

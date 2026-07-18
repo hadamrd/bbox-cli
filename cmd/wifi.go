@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -25,24 +24,39 @@ var wifiStatusCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if emit(map[string]any{"bands": bands, "guest": guest}) {
+		guestEnable, _ := c().GuestEnable()
+		if emit(map[string]any{"bands": bands, "guest": guest, "guest_enable": guestEnable}) {
 			return nil
 		}
 		fmt.Println("WiFi status")
+		redactHintShown := false
 		for _, b := range []string{"24", "5", "6"} {
 			info, _ := bands[b].(map[string]any)
 			radio := getMap(info, "radio")
+			label := b + " GHz"
+			// A missing band endpoint returns an empty map: treat as
+			// "not supported by this Bbox model" so we don't show <nil>.
+			if len(radio) == 0 {
+				fmt.Printf("  %-7s  enabled=off  (not supported by this Bbox model)\n", label)
+				continue
+			}
 			var ch any = radio["currentchannel"]
 			if ch == nil {
 				ch = radio["channel"]
 			}
-			label := b + " GHz"
 			fmt.Printf("  %-7s  enabled=%s  standard=%v  channel=%v\n",
-				label, fmtBool(radio["enable"]), firstOr(radio["standard"], "?"), ch)
+				label, fmtBool(radio["enable"]), dash(radio["standard"]), dash(ch))
 		}
 		for _, k := range []string{"guest24", "guest5"} {
-			if gi, ok := guest[k].(map[string]any); ok {
-				fmt.Printf("  %-7s  SSID=%v  passphrase=%v\n", k, gi["SSID"], gi["passphrase"])
+			gi, ok := guest[k].(map[string]any)
+			if !ok {
+				continue
+			}
+			pass, redacted := redact(gi["passphrase"])
+			fmt.Printf("  %-7s  SSID=%v  passphrase=%v\n", k, dash(gi["SSID"]), pass)
+			if redacted && !redactHintShown {
+				fmt.Println("           (use --show-secrets to reveal)")
+				redactHintShown = true
 			}
 		}
 		return nil
@@ -50,7 +64,7 @@ var wifiStatusCmd = &cobra.Command{
 }
 
 var wifiGuestCmd = &cobra.Command{
-	Use: "guest", Short: "Show guest WiFi",
+	Use: "guest", Short: "Show guest WiFi (state + SSID/passphrase)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
 			return err
@@ -59,11 +73,77 @@ var wifiGuestCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if emit(g) {
+		ge, _ := c().GuestEnable()
+		if emit(map[string]any{"guest": g, "guest_enable": ge}) {
 			return nil
 		}
-		b, _ := json.MarshalIndent(g, "", "  ")
-		fmt.Println(string(b))
+		fmt.Println("Guest WiFi")
+		// Prefer showing the guest24 SSID/passphrase (the guest network is
+		// mirrored on both bands with the same credentials on Bbox firmware).
+		var ssid, pass any
+		for _, k := range []string{"guest24", "guest5"} {
+			if gi, ok := g[k].(map[string]any); ok {
+				if ssid == nil {
+					ssid = gi["SSID"]
+				}
+				if pass == nil {
+					pass = gi["passphrase"]
+				}
+			}
+		}
+		passOut, redacted := redact(pass)
+		printKV([][2]any{
+			{"enabled", fmtBool(ge["enable"])},
+			{"radiostatus", fmtBool(ge["radiostatus"])},
+			{"SSID", dash(ssid)},
+			{"passphrase", passOut},
+		})
+		if redacted {
+			fmt.Println("  (use --show-secrets to reveal)")
+		}
+		return nil
+	},
+}
+
+var wifiGuestKeyCmd = &cobra.Command{
+	Use: "key NEW_PASSPHRASE", Args: cobra.ExactArgs(1), Short: "Change guest WiFi passphrase",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := ensureAuth(); err != nil {
+			return err
+		}
+		if err := c().GuestKeySet(args[0]); err != nil {
+			return err
+		}
+		fmt.Println("OK: guest WiFi passphrase changed")
+		return nil
+	},
+}
+
+var wifiGuestSSIDCmd = &cobra.Command{
+	Use: "ssid NEW_SSID", Args: cobra.ExactArgs(1), Short: "Rename guest WiFi SSID",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := ensureAuth(); err != nil {
+			return err
+		}
+		if err := c().GuestSSIDSet(args[0]); err != nil {
+			return err
+		}
+		fmt.Printf("OK: guest WiFi SSID=%s\n", args[0])
+		return nil
+	},
+}
+
+var wifiGuestToggleCmd = &cobra.Command{
+	Use: "toggle STATE", Args: cobra.ExactArgs(1), Short: "Enable/disable guest WiFi (on|off)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := ensureAuth(); err != nil {
+			return err
+		}
+		on := args[0] == "on"
+		if err := c().WifiGuestToggle(on); err != nil {
+			return err
+		}
+		fmt.Printf("OK: guest WiFi %s\n", strings.ToUpper(args[0]))
 		return nil
 	},
 }
@@ -83,8 +163,8 @@ var wifiWpsCmd = &cobra.Command{
 }
 
 var wifiToggleCmd = &cobra.Command{
-	Use:  "toggle BAND STATE",
-	Args: cobra.ExactArgs(2),
+	Use:   "toggle BAND STATE",
+	Args:  cobra.ExactArgs(2),
 	Short: "Enable/disable WiFi band (24|5|6|guest|all)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
@@ -157,6 +237,7 @@ var wifiKeyCmd = &cobra.Command{
 }
 
 func init() {
+	wifiGuestCmd.AddCommand(wifiGuestKeyCmd, wifiGuestSSIDCmd, wifiGuestToggleCmd)
 	wifiCmd.AddCommand(wifiStatusCmd, wifiGuestCmd, wifiWpsCmd, wifiToggleCmd, wifiChannelCmd, wifiSSIDCmd, wifiKeyCmd)
 	rootCmd.AddCommand(wifiCmd)
 }

@@ -11,11 +11,11 @@ import (
 var retrobotCmd = &cobra.Command{Use: "retrobot", Short: "retrobot proxy shortcut"}
 
 var (
-	rbTargetIP       string
-	rbUser           string
-	rbPassword       string
-	rbAccountID      int
-	rbSkipPortCheck  bool
+	rbTargetIP      string
+	rbUser          string
+	rbPassword      string
+	rbAccountID     int
+	rbSkipPortCheck bool
 )
 var retrobotSetupCmd = &cobra.Command{
 	Use:   "setup NAME EXTERNAL_PORT",
