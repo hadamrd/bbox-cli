@@ -71,7 +71,7 @@ func appendStatsSample(path string, s statsSample) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	b, err := json.Marshal(s)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func readStatsHistory(path string, tail int) ([]statsSample, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var out []statsSample
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
