@@ -10,6 +10,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// rawErrSnippetMax caps the error-message body preview so `bbox raw` errors stay one-line.
+const rawErrSnippetMax = 200
+
 var (
 	rawBody           string
 	rawIncludeHeaders bool
@@ -61,7 +64,11 @@ var rawCmd = &cobra.Command{
 			_, _ = os.Stdout.Write(data)
 		}
 		if code < 200 || code >= 300 {
-			os.Exit(1)
+			snip := string(data)
+			if len(snip) > rawErrSnippetMax {
+				snip = snip[:rawErrSnippetMax]
+			}
+			return fmt.Errorf("raw request failed: HTTP %d — %s", code, snip)
 		}
 		return nil
 	},
