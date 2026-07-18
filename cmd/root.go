@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hadamrd/bbox-cli/internal/client"
+	"github.com/hadamrd/bbox-cli/pkg/client"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

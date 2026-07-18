@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hadamrd/bbox-cli/internal/client"
+	"github.com/hadamrd/bbox-cli/pkg/client"
 )
 
 // mockBboxServer returns an httptest TLS server mimicking a subset of the

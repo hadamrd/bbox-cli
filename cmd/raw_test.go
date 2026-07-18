@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hadamrd/bbox-cli/internal/client"
+	"github.com/hadamrd/bbox-cli/pkg/client"
 )
 
 // rawTestServer returns a TLS server that answers login (200), device (200),

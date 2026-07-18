@@ -29,14 +29,14 @@ group commits by these prefixes.
    ```go
    func init() { rootCmd.AddCommand(fooCmd) }
    ```
-3. If it hits the router, call `ensureAuth()` at the top of `RunE`, then use `c().Foo()` from `internal/client/endpoints.go`.
+3. If it hits the router, call `ensureAuth()` at the top of `RunE`, then use `c().Foo()` from `pkg/client/endpoints.go`.
 4. Read commands honour `--json` via `if emit(v) { return nil }`.
 5. Write commands need a device token — that's already automatic in `Client.Write`.
 6. Add a test in `cmd/foo_test.go`. Use the `mockBboxServer` pattern from `cmd/integration_test.go` for round-trip coverage.
 
 ## Adding a new endpoint
 
-- Add a wrapper in `internal/client/endpoints.go` next to the closest neighbour (WiFi with WiFi, NAT with NAT).
+- Add a wrapper in `pkg/client/endpoints.go` next to the closest neighbour (WiFi with WiFi, NAT with NAT).
 - Reads go through `GetFirst` + `unwrap`. Writes go through `Write` — btoken is auto-appended.
 - Error messages start with the command name (`fmt.Errorf("dhcp_reserve: HTTP %d — %s", …)`).
 

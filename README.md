@@ -488,7 +488,7 @@ Create  -> POST   /api/v1/<resource>?btoken=<device_token>
 Delete  -> DELETE /api/v1/<resource>/<id>?btoken=<device_token>
 ```
 
-Device token comes from `GET /api/v1/device/token`; it is short-lived and refreshed 30 s before expiry. See `internal/client/` for the full reversed surface (28+ endpoints, 40+ commands).
+Device token comes from `GET /api/v1/device/token`; it is short-lived and refreshed 30 s before expiry. See `pkg/client/` for the full reversed surface (28+ endpoints, 40+ commands).
 
 </details>
 
