@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Hexalgo/bbox-cli/internal/client"
+	"github.com/hadamrd/bbox-cli/internal/client"
 	"github.com/spf13/cobra"
 )
 

@@ -10,7 +10,7 @@ full state export — all from the shell.
 ## Install
 
 ```bash
-go install github.com/Hexalgo/bbox-cli@latest
+go install github.com/hadamrd/bbox-cli@latest
 # -> binary lands at $(go env GOPATH)/bin/bbox
 ```
 

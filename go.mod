@@ -1,4 +1,4 @@
-module github.com/Hexalgo/bbox-cli
+module github.com/hadamrd/bbox-cli
 
 go 1.22
 
