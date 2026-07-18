@@ -45,6 +45,7 @@ var logoutCmd = &cobra.Command{
 var (
 	siBBoxID string
 	siBtoken string
+	siVerify bool
 )
 
 var sessionImportCmd = &cobra.Command{
@@ -79,13 +80,40 @@ session without hitting /api/v1/login again.`,
 			_ = os.Chmod(client.SessionFile(), 0600)
 		}
 		fmt.Printf("OK: wrote %s — try `bbox status` to verify.\n", client.SessionFile())
+
+		if siBtoken == "" {
+			fmt.Fprintln(os.Stderr, "warning: no --btoken provided. This session will work for read commands")
+			fmt.Fprintln(os.Stderr, "(status, info, host list, ...) but write commands (nat add, wifi key,")
+			fmt.Fprintln(os.Stderr, "reboot, ...) will fail with HTTP 401. To fix, re-import with both:")
+			fmt.Fprintln(os.Stderr, "  bbox session-import --bbox-id <BBOX_ID> --btoken <btoken>")
+			fmt.Fprintln(os.Stderr, "Both cookies are visible in Chrome DevTools → Application → Cookies →")
+			fmt.Fprintln(os.Stderr, "https://mabbox.bytel.fr.")
+		}
+
+		if siVerify {
+			tok, err := c().DeviceToken()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: device-token verify failed: %v\n", err)
+				fmt.Fprintln(os.Stderr, "         writes will likely 401. Re-import with a fresh --btoken.")
+			} else if tok == "" {
+				fmt.Fprintln(os.Stderr, "warning: device-token endpoint returned empty token")
+			} else {
+				if siBtoken != "" {
+					fmt.Println("verify: device-token OK — writes should work.")
+				} else {
+					// btoken empty but token endpoint accepted us: unusual, warn anyway.
+					fmt.Fprintln(os.Stderr, "warning: btoken cookie may be stale")
+				}
+			}
+		}
 		return nil
 	},
 }
 
 func init() {
 	sessionImportCmd.Flags().StringVar(&siBBoxID, "bbox-id", "", "BBOX_ID cookie value from Chrome DevTools")
-	sessionImportCmd.Flags().StringVar(&siBtoken, "btoken", "", "optional btoken cookie value")
+	sessionImportCmd.Flags().StringVar(&siBtoken, "btoken", "", "optional btoken cookie value (required for writes)")
+	sessionImportCmd.Flags().BoolVar(&siVerify, "verify", false, "after writing, probe /api/v1/device/token to confirm writes will work")
 	_ = sessionImportCmd.MarkFlagRequired("bbox-id")
 	rootCmd.AddCommand(loginCmd, logoutCmd, sessionImportCmd)
 }

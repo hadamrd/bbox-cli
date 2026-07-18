@@ -171,7 +171,14 @@ func runDiag() []diagCheck {
 	tokCheck := diagCheck{Check: "device token fetchable"}
 	if tok, err := c().DeviceToken(); err != nil {
 		tokCheck.Status = diagFail
-		tokCheck.Detail = shortErr(err)
+		detail := shortErr(err)
+		// "session valid" already passed above (we'd have returned), so if the
+		// token endpoint 401s the culprit is almost always a session-import
+		// that omitted the btoken cookie.
+		if strings.Contains(detail, "401") {
+			detail += " (session was imported without btoken cookie — writes will fail; see 'bbox session-import --help')"
+		}
+		tokCheck.Detail = detail
 	} else if tok == "" {
 		tokCheck.Status = diagFail
 		tokCheck.Detail = "empty token"

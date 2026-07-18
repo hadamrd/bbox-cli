@@ -38,6 +38,17 @@ cd bbox-cli
 go build -o bbox .
 ```
 
+## Docker
+
+Multi-arch images are published to GHCR (`linux/amd64` + `linux/arm64`) on every tagged release, based on `gcr.io/distroless/static-debian12:nonroot` (~2 MB, no shell, non-root).
+
+```bash
+docker run --rm ghcr.io/hadamrd/bbox-cli:latest version
+docker run --rm -v ~/.bbox-session.json:/home/nonroot/.bbox-session.json ghcr.io/hadamrd/bbox-cli:latest status
+```
+
+Pin a specific version by replacing `:latest` with `:vX.Y.Z`.
+
 ## Quick start
 
 ```bash

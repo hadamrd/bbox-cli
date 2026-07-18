@@ -49,6 +49,51 @@ checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
+dockers:
+  - id: bbox-amd64
+    ids:
+      - bbox
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/hadamrd/bbox-cli:{{ .Version }}-amd64"
+      - "{{ if not .Prerelease }}ghcr.io/hadamrd/bbox-cli:latest-amd64{{ end }}"
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/hadamrd/bbox-cli"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+  - id: bbox-arm64
+    ids:
+      - bbox
+    goos: linux
+    goarch: arm64
+    image_templates:
+      - "ghcr.io/hadamrd/bbox-cli:{{ .Version }}-arm64"
+      - "{{ if not .Prerelease }}ghcr.io/hadamrd/bbox-cli:latest-arm64{{ end }}"
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/hadamrd/bbox-cli"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+docker_manifests:
+  - name_template: "ghcr.io/hadamrd/bbox-cli:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/hadamrd/bbox-cli:{{ .Version }}-amd64"
+      - "ghcr.io/hadamrd/bbox-cli:{{ .Version }}-arm64"
+  - name_template: "{{ if not .Prerelease }}ghcr.io/hadamrd/bbox-cli:latest{{ end }}"
+    image_templates:
+      - "ghcr.io/hadamrd/bbox-cli:latest-amd64"
+      - "ghcr.io/hadamrd/bbox-cli:latest-arm64"
+    skip_push: auto
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
