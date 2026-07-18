@@ -1,0 +1,9 @@
+bbox
+bbox.exe
+dist/
+.bbox-session.json
+.bbox-password
+.idea/
+.vscode/
+*.test
+coverage.out
