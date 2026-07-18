@@ -53,6 +53,7 @@ snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
 changelog:
+  use: git
   sort: asc
   filters:
     exclude:
@@ -61,7 +62,21 @@ changelog:
       - "^chore:"
       - "Merge pull request"
       - "Merge branch"
+  groups:
+    - title: Features
+      regexp: '(?i)^feat(\(.+\))?:'
+      order: 0
+    - title: Bug fixes
+      regexp: '(?i)^fix(\(.+\))?:'
+      order: 1
+    - title: Performance
+      regexp: '(?i)^perf(\(.+\))?:'
+      order: 2
+    - title: Other
+      order: 999
 
 release:
   draft: false
   prerelease: auto
+  footer: |
+    **Full changelog**: https://github.com/hadamrd/bbox-cli/compare/{{ .PreviousTag }}...{{ .Tag }}

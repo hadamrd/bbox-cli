@@ -21,7 +21,16 @@ var hostWatchCmd = &cobra.Command{
 	Short: "Poll and alert on host connect/disconnect events",
 	Long: `Poll GET /api/v1/hosts every --interval seconds and print UP / DOWN events
 by diffing the set of currently-active hosts. The initial active set is seeded
-silently; only subsequent changes are printed.`,
+silently; only subsequent changes are printed. Use --history to persist events
+as JSONL for later analysis. Ctrl-C exits with status 130.`,
+	Example: `  # Watch every 10s, print human-readable UP/DOWN events
+  bbox host watch --interval 10
+
+  # Persist events to JSONL for later grep / dashboarding
+  bbox host watch --history ~/.bbox-host-events.jsonl
+
+  # Machine-readable output (one JSON object per event, per line)
+  bbox host watch --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
 			return err

@@ -58,7 +58,19 @@ var (
 var natAddCmd = &cobra.Command{
 	Use:   "add NAME EXTERNAL_PORT TARGET_IP",
 	Short: "Add a NAT rule (MAP-T port-range validated)",
-	Args:  cobra.ExactArgs(3),
+	Long: `Add a port-forward rule. The Bbox is behind Bouygues MAP-T, which reserves
+a specific WAN port range for your subscriber. bbox nat add refuses to create
+rules with EXTERNAL_PORT outside that range unless --skip-port-check is passed.
+Run bbox info to see your allowed range.`,
+	Example: `  # Expose a local SSH server on WAN port 40080 (inside MAP-T range)
+  bbox nat add ssh 40080 192.168.1.42 --internal-port 22
+
+  # Expose a UDP game server
+  bbox nat add game 40100 192.168.1.30 --protocol udp
+
+  # Bypass the port-range check (advanced)
+  bbox nat add unrestricted 22 192.168.1.42 --skip-port-check`,
+	Args: cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		externalPort, err := strconv.Atoi(args[1])

@@ -199,6 +199,19 @@ var exportSnapshot bool
 var exportCmd = &cobra.Command{
 	Use:   "export-config",
 	Short: "dump the entire router state to JSON (or diff against a saved snapshot with --diff)",
+	Long: `Walk every read-only admin endpoint (device, WAN, LAN, hosts, NAT, DMZ, UPnP,
+firewall, DHCP, DynDNS, wireless, parentalcontrol, hibernate, voip, notification,
+device/log) and emit a single JSON document. Use --snapshot to timestamp the
+dump into ~/.bbox-snapshots/ for drift tracking, then later use --diff <path>
+to print a semantic diff against that saved state.`,
+	Example: `  # Dump full config to stdout
+  bbox export-config
+
+  # Take a timestamped snapshot (prints the written path)
+  bbox export-config --snapshot
+
+  # Later: diff the live router against a saved snapshot
+  bbox export-config --diff ~/.bbox-snapshots/20260718-100000.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
 			return err

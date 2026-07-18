@@ -107,6 +107,14 @@ var wifiGuestCmd = &cobra.Command{
 
 var wifiGuestKeyCmd = &cobra.Command{
 	Use: "key NEW_PASSPHRASE", Args: cobra.ExactArgs(1), Short: "Change guest WiFi passphrase",
+	Long: `Rotate the guest-WiFi WPA passphrase. The guest network is mirrored across
+2.4 and 5 GHz on Bbox firmware, so this one call updates both. Existing guest
+clients are disconnected; they must reconnect with the new passphrase.`,
+	Example: `  # Rotate to a fresh passphrase (quote if it contains shell metachars)
+  bbox wifi guest key 'Correct-Horse-Battery-Staple-42'
+
+  # Verify the change (append --show-secrets to see the passphrase in cleartext)
+  bbox wifi guest --show-secrets`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
 			return err

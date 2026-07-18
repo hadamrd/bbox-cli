@@ -17,6 +17,18 @@ var configCmd = &cobra.Command{
 var configInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Write an example config file to ~/.bbox.yaml (or --config PATH)",
+	Long: `Create a commented example config at ~/.bbox.yaml so you don't need to pass
+--verbose / --retries / --password-file on every call. Refuses to overwrite
+an existing file. Config-file precedence: CLI flag > BBOX_* env var > file >
+built-in default. Use bbox config show to see the effective values.`,
+	Example: `  # Bootstrap the default config location
+  bbox config init
+
+  # Bootstrap at a custom path (also usable via --config)
+  bbox config init --config /etc/bbox/bbox.yaml
+
+  # Verify the effective values
+  bbox config show`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := cfgFile
 		if path == "" {

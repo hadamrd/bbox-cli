@@ -21,6 +21,17 @@ var retrobotSetupCmd = &cobra.Command{
 	Use:   "setup NAME EXTERNAL_PORT",
 	Args:  cobra.ExactArgs(2),
 	Short: "add NAT rule + print SOCKS5 URL for accounts.socks5_proxy",
+	Long: `One-shot setup for a retrobot exit-node proxy: creates a TCP NAT rule pointing
+at this host's LAN IP (auto-detected via /api/v1/hosts/me) and prints the
+socks5:// URL to paste into retrobot's accounts.socks5_proxy column, plus a
+ready-to-run gost invocation. EXTERNAL_PORT is MAP-T-validated unless
+--skip-port-check is passed.`,
+	Example: `  # Basic setup — proxy on WAN port 40080, this PC as target
+  bbox retrobot setup account42 40080 --password s3cret
+
+  # Point at a different LAN host and print the SQL UPDATE
+  bbox retrobot setup account42 40080 --target-ip 192.168.1.50 \
+    --password s3cret --account-id 42`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
 			return err

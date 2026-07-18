@@ -177,9 +177,11 @@ func parseTimeout() time.Duration {
 }
 
 // clientOnce builds bx lazily so --help doesn't touch the network.
+// The password getter is wired in here so mid-command 401s auto-refresh
+// (see Client.tryRefresh) without threading a callback through every subcommand.
 func c() *client.Client {
 	if bx == nil {
-		bx = client.New(verbose, retries, parseTimeout())
+		bx = client.New(verbose, retries, parseTimeout()).WithPasswordGetter(getPassword)
 	}
 	return bx
 }

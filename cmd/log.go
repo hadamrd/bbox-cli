@@ -22,6 +22,18 @@ var (
 var logCmd = &cobra.Command{
 	Use:   "log",
 	Short: "Show recent device logs",
+	Long: `Print entries from the Bbox device log (DEVICE_UP/DOWN, LOGIN_LOCAL_LOCKED,
+service transitions, etc.). Use --search / --type to narrow down and --follow
+to tail the log in real time. Known event families get their param field
+pretty-printed (mac / ip / hostname).`,
+	Example: `  # Last 50 entries
+  bbox log --last 50
+
+  # Only login-lockout events, live-follow style
+  bbox log --follow --type LOGIN_LOCAL_LOCKED
+
+  # Grep events for a MAC address across event+param
+  bbox log --search aa:bb:cc:dd:ee:ff --last 200`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
 			return err

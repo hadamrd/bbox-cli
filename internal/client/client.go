@@ -59,6 +59,18 @@ type Client struct {
 	tokenExpires time.Time
 	// sleep is the backoff sleep, overridable in tests.
 	sleep func(time.Duration)
+	// passwordGetter, when non-nil, is used to auto-recover from a mid-command
+	// 401 on Get()/Write() by clearing the cookie jar, logging in again, and
+	// retrying the original request exactly once. Set via WithPasswordGetter.
+	passwordGetter func() (string, error)
+}
+
+// WithPasswordGetter installs a password source used to auto-refresh the
+// session when Get/Write get a 401 after LoadSession succeeded. Returns c
+// for chaining. Passing nil disables refresh (default).
+func (c *Client) WithPasswordGetter(fn func() (string, error)) *Client {
+	c.passwordGetter = fn
+	return c
 }
 
 // New constructs a Client with an InsecureSkipVerify HTTPS transport (Bbox is self-signed).
@@ -148,11 +160,49 @@ func (c *Client) req(method, path string, body []byte, ctype string) (int, []byt
 	return 0, nil, nil, lastErr
 }
 
+// tryRefresh clears the cookie jar, invokes the passwordGetter, and re-logs in.
+// Returns true iff the refresh succeeded and the caller should retry.
+// Preconditions: passwordGetter != nil AND sessionWasLoaded (checked by callers).
+func (c *Client) tryRefresh(method, path string) bool {
+	if c.Verbose {
+		fmt.Fprintf(os.Stderr, "<- 401; refreshing session…\n")
+	}
+	// Clear the cookie jar so the retry doesn't send the stale BBOX_ID.
+	jar, _ := cookiejar.New(nil)
+	c.jar = jar
+	c.http.Jar = jar
+	pw, err := c.passwordGetter()
+	if err != nil {
+		if c.Verbose {
+			fmt.Fprintf(os.Stderr, "   refresh: passwordGetter failed: %v\n", err)
+		}
+		return false
+	}
+	if err := c.Login(pw); err != nil {
+		if c.Verbose {
+			fmt.Fprintf(os.Stderr, "   refresh: login failed: %v\n", err)
+		}
+		return false
+	}
+	if c.Verbose {
+		fmt.Fprintf(os.Stderr, "-> retry %s %s\n", method, path)
+	}
+	return true
+}
+
 // Get performs a JSON GET and unmarshals the response into any.
 func (c *Client) Get(path string) (any, error) {
 	code, data, _, err := c.req("GET", path, nil, "")
 	if err != nil {
 		return nil, classifyNetworkError(err)
+	}
+	if code == 401 && c.passwordGetter != nil && sessionWasLoaded {
+		if c.tryRefresh("GET", path) {
+			code, data, _, err = c.req("GET", path, nil, "")
+			if err != nil {
+				return nil, classifyNetworkError(err)
+			}
+		}
 	}
 	if code >= 400 {
 		return nil, classifyError("GET", path, code, data)
@@ -196,6 +246,20 @@ func (c *Client) Write(method, path string, form map[string]any) (int, []byte, h
 	code, data, hdrs, err := c.req(method, full, body, "application/x-www-form-urlencoded; charset=UTF-8")
 	if err != nil {
 		return code, data, hdrs, classifyNetworkError(err)
+	}
+	if code == 401 && c.passwordGetter != nil && sessionWasLoaded {
+		if c.tryRefresh(method, path) {
+			// Re-mint the btoken — Login invalidated it.
+			tok2, terr := c.DeviceToken()
+			if terr != nil {
+				return code, data, hdrs, classifyError(method, path, code, data)
+			}
+			full2 := path + sep + "btoken=" + url.QueryEscape(tok2)
+			code, data, hdrs, err = c.req(method, full2, body, "application/x-www-form-urlencoded; charset=UTF-8")
+			if err != nil {
+				return code, data, hdrs, classifyNetworkError(err)
+			}
+		}
 	}
 	if code >= 400 {
 		return code, data, hdrs, classifyError(method, path, code, data)

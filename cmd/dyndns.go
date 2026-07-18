@@ -54,6 +54,18 @@ var (
 )
 var dyndnsEnableCmd = &cobra.Command{
 	Use: "enable PROVIDER", Args: cobra.ExactArgs(1), Short: "Enable DynDNS (DuckDNS: empty username, token as password)",
+	Long: `Enable the router's built-in DynDNS updater for one of the supported providers
+(run bbox dyndns show to list them). DuckDNS is a special case: leave --username
+empty and pass your DuckDNS token as --password. The Bbox will then push the
+current WAN IP to the provider on every renewal.`,
+	Example: `  # DuckDNS: no username, token-as-password
+  bbox dyndns enable duckdns --hostname you.duckdns.org --password YOUR_TOKEN
+
+  # no-ip / OVH with a user + password
+  bbox dyndns enable no-ip --hostname you.ddns.net --username alice --password s3cret
+
+  # Turn it off later
+  bbox dyndns disable`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
 			return err

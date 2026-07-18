@@ -12,6 +12,16 @@ import (
 var summaryCmd = &cobra.Command{
 	Use:   "summary",
 	Short: "One-shot pretty-printed router summary (link / WAN / hosts / services / WiFi / VoIP)",
+	Long: `Hit /api/v1/summary — the dashboard aggregate endpoint — and pretty-print the
+result: auth state, link/internet health, WAN v4/v6 status, currently-active
+hosts, service enable flags, wireless master switches, VoIP line status.
+Cheaper than bbox status + bbox host list + bbox wifi status combined; ideal
+for scripting.`,
+	Example: `  # Human-readable summary
+  bbox summary
+
+  # Machine-readable (single JSON object with all sections)
+  bbox summary --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := ensureAuth(); err != nil {
 			return err

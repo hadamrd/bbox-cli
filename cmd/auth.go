@@ -50,6 +50,19 @@ var (
 var sessionImportCmd = &cobra.Command{
 	Use:   "session-import",
 	Short: "bootstrap session from Chrome DevTools cookies",
+	Long: `Escape hatch for when the Bbox login endpoint is rate-limited (every failed
+retry EXTENDS the lockout). Log in via the router web UI in Chrome, copy the
+BBOX_ID cookie from DevTools > Application > Cookies, and paste it here. The
+CLI writes it to ~/.bbox-session.json so subsequent commands see a valid
+session without hitting /api/v1/login again.`,
+	Example: `  # Bare minimum: paste the BBOX_ID cookie from Chrome DevTools
+  bbox session-import --bbox-id 1a2b3c4d5e6f...
+
+  # Optionally include a btoken cookie (needed on some firmwares for writes)
+  bbox session-import --bbox-id 1a2b... --btoken 0011...
+
+  # Verify
+  bbox status`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		expires := time.Now().UTC().Add(8 * time.Hour).Unix()
 		entries := map[string]map[string]any{
