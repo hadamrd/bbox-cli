@@ -32,8 +32,21 @@ var BaseURL = "https://mabbox.bytel.fr"
 
 const UserAgent = "Mozilla/5.0 bbox-cli"
 
+// sessionFileOverride, when non-empty, is returned by SessionFile() in place of
+// the ~/.bbox-session.json default. Set via SetSessionFile — used by the
+// Terraform provider (and tests) to point at a per-invocation session file
+// without touching the caller's environment.
+var sessionFileOverride string
+
+// SetSessionFile installs a package-level override for the session file path.
+// Pass "" to restore the default (~/.bbox-session.json).
+func SetSessionFile(path string) { sessionFileOverride = path }
+
 // SessionFile is the path to the cached cookie session (matches Python layout).
 func SessionFile() string {
+	if sessionFileOverride != "" {
+		return sessionFileOverride
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".bbox-session.json")
 }

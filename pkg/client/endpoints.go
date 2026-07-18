@@ -202,6 +202,9 @@ type NATAddArgs struct {
 	Protocol     string
 	RemoteIP     string
 	IPVersion    string
+	// Disabled creates the rule with enable=0. Zero-value (false) preserves the
+	// pre-existing behaviour of adding an enabled rule.
+	Disabled bool
 }
 
 func (c *Client) NATAdd(a NATAddArgs) (int, error) {
@@ -214,8 +217,12 @@ func (c *Client) NATAdd(a NATAddArgs) (int, error) {
 	if a.IPVersion == "" {
 		a.IPVersion = "IPv4"
 	}
+	enable := 1
+	if a.Disabled {
+		enable = 0
+	}
 	code, _, hdrs, err := c.Write("POST", "/api/v1/nat/rules", map[string]any{
-		"enable":        1,
+		"enable":        enable,
 		"description":   a.Description,
 		"protocol":      strings.ToLower(a.Protocol),
 		"ipaddress":     a.InternalIP,
@@ -232,6 +239,20 @@ func (c *Client) NATAdd(a NATAddArgs) (int, error) {
 		return 0, fmt.Errorf("nat_add: HTTP %d", code)
 	}
 	return locID(hdrs.Get("Location")), nil
+}
+
+// NATToggleRule flips the enable flag of a single NAT rule in-place, mirroring
+// FirewallRuleToggle. Lets callers avoid a delete+recreate churn when only
+// the enable state changes.
+func (c *Client) NATToggleRule(ruleID int, enable bool) error {
+	code, data, _, err := c.Write("PUT", fmt.Sprintf("/api/v1/nat/rules/%d", ruleID), map[string]any{"enable": boolInt(enable)})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("nat_rule_toggle: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
 }
 
 func (c *Client) NATDel(ruleID int) error {
