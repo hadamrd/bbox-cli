@@ -153,34 +153,6 @@ var wanIPCmd = &cobra.Command{
 	},
 }
 
-var lastN int
-var logCmd = &cobra.Command{
-	Use:   "log",
-	Short: "Show recent device logs",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := ensureAuth(); err != nil {
-			return err
-		}
-		logs, err := c().Logs()
-		if err != nil {
-			return err
-		}
-		if lastN > 0 && lastN < len(logs) {
-			logs = logs[:lastN]
-		}
-		if emit(logs) {
-			return nil
-		}
-		for _, e := range logs {
-			m, _ := e.(map[string]any)
-			date := firstNonEmpty(m["date"], "?")
-			lg := firstNonEmpty(m["log"], "?")
-			fmt.Printf("%-26v  %-28v  %v\n", date, lg, toStr(m["param"]))
-		}
-		return nil
-	},
-}
-
 var logClearCmd = &cobra.Command{
 	Use:   "log-clear",
 	Short: "Clear device logs",
@@ -264,9 +236,8 @@ var exportCmd = &cobra.Command{
 }
 
 func init() {
-	logCmd.Flags().IntVar(&lastN, "last", 20, "how many log entries to show")
 	exportCmd.Flags().StringVarP(&exportFile, "file", "o", "", "write to file instead of stdout")
-	rootCmd.AddCommand(statusCmd, infoCmd, wanIPCmd, logCmd, logClearCmd, statsCmd, exportCmd)
+	rootCmd.AddCommand(statusCmd, infoCmd, wanIPCmd, logClearCmd, statsCmd, exportCmd)
 }
 
 func firstNonEmpty(v any, def string) any {
