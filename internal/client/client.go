@@ -26,10 +26,11 @@ import (
 	"time"
 )
 
-const (
-	BaseURL   = "https://mabbox.bytel.fr"
-	UserAgent = "Mozilla/5.0 bbox-cli"
-)
+// BaseURL is the router admin origin. Overridable by tests via
+// `client.BaseURL = server.URL` (self-signed httptest server).
+var BaseURL = "https://mabbox.bytel.fr"
+
+const UserAgent = "Mozilla/5.0 bbox-cli"
 
 // SessionFile is the path to the cached cookie session (matches Python layout).
 func SessionFile() string {
