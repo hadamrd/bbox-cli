@@ -1014,6 +1014,127 @@ func (c *Client) LogClear() error {
 	return nil
 }
 
+// ─── VoIP (write side; VoIP() read lives in the READ section) ────────────────
+
+// VoIPBlockAnonymous blocks (block=true) or allows anonymous / withheld-number
+// calls on a line (1 or 2). Verified: PUT /voip/blockanon/{line} {block}.
+func (c *Client) VoIPBlockAnonymous(line int, block bool) error {
+	code, data, _, err := c.Write("PUT", fmt.Sprintf("/api/v1/voip/blockanon/%d", line), map[string]any{"block": boolInt(block)})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("voip_block_anonymous(%d): HTTP %d — %s", line, code, snippet(data))
+	}
+	return nil
+}
+
+// VoIPAnonBlocked reports whether anonymous calls are blocked on a line. The
+// state surfaces as the line's `blockstate` in /voip (the /voip/blockanon/{n}
+// endpoint is write-only). Returns false if the line isn't found.
+func (c *Client) VoIPAnonBlocked(line int) (bool, error) {
+	lines, err := c.VoIP()
+	if err != nil {
+		return false, err
+	}
+	for _, lAny := range lines {
+		l, _ := lAny.(map[string]any)
+		if toInt(l["id"]) == line {
+			return toBool(l["blockstate"]), nil
+		}
+	}
+	return false, nil
+}
+
+// VoIPScheduler returns the VoIP call-scheduler object
+// ({enable, unblock, rules, savedRules}).
+func (c *Client) VoIPScheduler() (map[string]any, error) {
+	m, err := c.GetFirst("/api/v1/voip/scheduler")
+	if err != nil {
+		return map[string]any{}, nil
+	}
+	return unwrap(unwrap(m, "voip"), "scheduler"), nil
+}
+
+// VoIPSchedulerUnblock flips the scheduler's `unblock` flag (the toggle the Bbox
+// app uses): unblock=true lets calls through, overriding the configured windows.
+func (c *Client) VoIPSchedulerUnblock(unblock bool) error {
+	code, data, _, err := c.Write("PUT", "/api/v1/voip/scheduler", map[string]any{"unblock": boolInt(unblock)})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("voip_scheduler_unblock: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
+}
+
+// VoIPSchedulerRules returns the VoIP call-block windows (editable savedRules and
+// the runtime rules), same shape as the WiFi/parental schedulers.
+func (c *Client) VoIPSchedulerRules() (rules, savedRules []any, err error) {
+	s, err := c.VoIPScheduler()
+	if err != nil {
+		return nil, nil, err
+	}
+	return asList(s["rules"]), asList(s["savedRules"]), nil
+}
+
+// VoIPSchedulerAddRule adds a call-block window and returns its new id.
+func (c *Client) VoIPSchedulerAddRule(a SchedulerRuleArgs) (int, error) {
+	return c.addSchedulerRule("/api/v1/voip/scheduler", a)
+}
+
+// VoIPSchedulerDelRule removes a call-block window by id.
+func (c *Client) VoIPSchedulerDelRule(id int) error {
+	return c.delSchedulerRule("/api/v1/voip/scheduler", id)
+}
+
+// ─── USB ───────────────────────────────────────────────────────────────────
+
+// USB returns the USB subsystem state ({usb3:{enable}, parent, child}).
+func (c *Client) USB() (map[string]any, error) {
+	m, err := c.GetFirst("/api/v1/device/usb")
+	if err != nil {
+		return map[string]any{}, nil
+	}
+	return unwrap(m, "usb"), nil
+}
+
+// USB3Enabled reports whether USB 3.0 mode is on. (USB 3.0 can interfere with
+// 2.4 GHz WiFi, so some setups keep it off.)
+func (c *Client) USB3Enabled() (bool, error) {
+	u, err := c.USB()
+	if err != nil {
+		return false, err
+	}
+	return toBool(unwrap(u, "usb3")["enable"]), nil
+}
+
+// USB3Toggle enables/disables USB 3.0 mode. Verified: PUT /device/usb3 {enable}.
+func (c *Client) USB3Toggle(enable bool) error {
+	code, data, _, err := c.Write("PUT", "/api/v1/device/usb3", map[string]any{"enable": boolInt(enable)})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("usb3_toggle: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
+}
+
+// USBPortToggle enables/disables a specific USB port. Verified from the admin
+// bundle: PUT /device/usb/{port} {enable}.
+func (c *Client) USBPortToggle(port string, enable bool) error {
+	code, data, _, err := c.Write("PUT", "/api/v1/device/usb/"+port, map[string]any{"enable": boolInt(enable)})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("usb_port_toggle(%s): HTTP %d — %s", port, code, snippet(data))
+	}
+	return nil
+}
+
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 func boolInt(b bool) int {

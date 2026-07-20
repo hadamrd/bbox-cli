@@ -1,6 +1,15 @@
 # Changelog
 
-## [Unreleased]
+## [v0.17.0]
+### Features
+- VoIP anti-spam + USB + read helpers, all verified against firmware 25.3.20:
+  - VoIP: `VoIPBlockAnonymous`, `VoIPAnonBlocked`, `VoIPScheduler`,
+    `VoIPSchedulerUnblock`, `VoIPSchedulerRules/AddRule/DelRule` (reuses
+    `SchedulerRuleArgs`). CLI: `bbox voip block-anon LINE on|off`.
+  - USB: `USB`, `USB3Enabled`, `USB3Toggle`, `USBPortToggle`. CLI: `bbox usb
+    {show,usb3}`.
+
+## [v0.16.0]
 ### Features
 - WiFi access control + WiFi-pause scheduler + parental control (write side).
   - SDK: `WifiACLToggle/WifiACLRules/WifiACLAddRule/WifiACLDelRule`,
