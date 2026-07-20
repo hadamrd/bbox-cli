@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+### Features
+- WiFi access control + WiFi-pause scheduler + parental control (write side).
+  - SDK: `WifiACLToggle/WifiACLRules/WifiACLAddRule/WifiACLDelRule`,
+    `WifiSchedulerOn/WifiSchedulerRules/WifiSchedulerAddRule/WifiSchedulerDelRule`,
+    `ParentalToggle/ParentalSetPolicy/ParentalScheduler/ParentalRules/ParentalAddRule/ParentalDelRule/ParentalHostSet`,
+    plus the shared `SchedulerRuleArgs`.
+  - CLI: `bbox wifi acl {show,toggle,add,del}`, `bbox scheduler {on,add,del}`,
+    `bbox parental {show,toggle,policy,add,del,device}`.
+  - All endpoints reverse-engineered from the admin-UI bundle and round-trip
+    verified against firmware 25.3.20 (PRV36AX349B).
+
 ## [v0.9.0] - 2026-07-18
 ### Features
 - bbox lookup + bbox metrics (Prometheus) + integration test suite (87b04ac)

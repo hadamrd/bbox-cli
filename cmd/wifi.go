@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -244,8 +245,96 @@ var wifiKeyCmd = &cobra.Command{
 	},
 }
 
+// ─── WiFi access control (MAC ACL) ──────────────────────────────────────────
+
+var wifiACLCmd = &cobra.Command{Use: "acl", Short: "WiFi access control (MAC allow/deny filtering)"}
+
+var wifiACLShowCmd = &cobra.Command{
+	Use: "show", Short: "Show MAC access-control state + entries",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := ensureAuth(); err != nil {
+			return err
+		}
+		acl, err := c().WifiACL()
+		if err != nil {
+			return err
+		}
+		if emit(acl) {
+			return nil
+		}
+		printKV([][2]any{{"enabled", fmtBool(acl["enable"])}})
+		rules, _ := acl["rules"].([]any)
+		if len(rules) == 0 {
+			fmt.Println("  entries      -")
+			return nil
+		}
+		fmt.Printf("\n%-4s %-4s %-18s\n", "ID", "En", "MAC")
+		for _, rAny := range rules {
+			r, _ := rAny.(map[string]any)
+			fmt.Printf("%-4v %-4s %-18v\n", firstOr(r["id"], "?"), fmtBool(r["enable"]), dash(r["macaddress"]))
+		}
+		return nil
+	},
+}
+
+var wifiACLToggleCmd = &cobra.Command{
+	Use: "toggle STATE", Args: cobra.ExactArgs(1), Short: "Enable/disable MAC filtering (on|off)",
+	Long: `Turn WiFi MAC access-control filtering on or off.
+
+WARNING: enabling filtering makes the router enforce the entry list. Confirm the
+device you are managing from is covered before enabling, or you may lock yourself
+out of WiFi. Wired access is unaffected.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := ensureAuth(); err != nil {
+			return err
+		}
+		on := args[0] == "on"
+		if err := c().WifiACLToggle(on); err != nil {
+			return err
+		}
+		fmt.Printf("OK: WiFi MAC filtering %s\n", strings.ToUpper(args[0]))
+		return nil
+	},
+}
+
+var wifiACLEnable bool
+var wifiACLAddCmd = &cobra.Command{
+	Use: "add MAC", Args: cobra.ExactArgs(1), Short: "Add a MAC to the access-control list",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := ensureAuth(); err != nil {
+			return err
+		}
+		id, err := c().WifiACLAddRule(args[0], wifiACLEnable)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("OK: added ACL entry id=%d mac=%s enabled=%v\n", id, args[0], wifiACLEnable)
+		return nil
+	},
+}
+
+var wifiACLDelCmd = &cobra.Command{
+	Use: "del ID", Args: cobra.ExactArgs(1), Short: "Remove an access-control entry by id",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := ensureAuth(); err != nil {
+			return err
+		}
+		id, err := strconv.Atoi(args[0])
+		if err != nil {
+			return fmt.Errorf("ID must be a number")
+		}
+		if err := c().WifiACLDelRule(id); err != nil {
+			return err
+		}
+		fmt.Printf("OK: removed ACL entry id=%d\n", id)
+		return nil
+	},
+}
+
 func init() {
+	wifiACLAddCmd.Flags().BoolVar(&wifiACLEnable, "enable", true, "create the entry enabled")
+	wifiACLCmd.AddCommand(wifiACLShowCmd, wifiACLToggleCmd, wifiACLAddCmd, wifiACLDelCmd)
 	wifiGuestCmd.AddCommand(wifiGuestKeyCmd, wifiGuestSSIDCmd, wifiGuestToggleCmd)
-	wifiCmd.AddCommand(wifiStatusCmd, wifiGuestCmd, wifiWpsCmd, wifiToggleCmd, wifiChannelCmd, wifiSSIDCmd, wifiKeyCmd)
+	wifiCmd.AddCommand(wifiStatusCmd, wifiGuestCmd, wifiWpsCmd, wifiToggleCmd, wifiChannelCmd, wifiSSIDCmd, wifiKeyCmd, wifiACLCmd)
 	rootCmd.AddCommand(wifiCmd)
 }

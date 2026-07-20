@@ -513,6 +513,83 @@ func (c *Client) HostTrust(hostID int, trusted bool) error {
 	return nil
 }
 
+// ─── Parental control ──────────────────────────────────────────────────────
+
+// ParentalToggle enables/disables parental control globally. Mirrors the other
+// resource-level toggles: PUT {enable}. The per-host block/unblock helpers live
+// with the Hosts section (HostBlock/HostUnblock use /parentalcontrol/hosts).
+func (c *Client) ParentalToggle(enable bool) error {
+	code, data, _, err := c.Write("PUT", "/api/v1/parentalcontrol", map[string]any{"enable": boolInt(enable)})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("parental_toggle: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
+}
+
+// ParentalScheduler returns the parental-control scheduler object
+// ({enable, defaultpolicy, rules, savedRules}). Prefer this over Parental() when
+// you need the pause windows — the base /parentalcontrol read omits them.
+func (c *Client) ParentalScheduler() (map[string]any, error) {
+	m, err := c.GetFirst("/api/v1/parentalcontrol/scheduler")
+	if err != nil {
+		return map[string]any{}, nil
+	}
+	return unwrap(unwrap(m, "parentalcontrol"), "scheduler"), nil
+}
+
+// ParentalSetPolicy sets the default access policy: "Forbidden" (block outside
+// allowed windows) or "Accept". Verified: PUT /parentalcontrol {defaultpolicy}.
+func (c *Client) ParentalSetPolicy(policy string) error {
+	code, data, _, err := c.Write("PUT", "/api/v1/parentalcontrol", map[string]any{"defaultpolicy": policy})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("parental_set_policy: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
+}
+
+// ParentalRules returns the active and parked parental-control pause windows.
+func (c *Client) ParentalRules() (rules, savedRules []any, err error) {
+	s, err := c.ParentalScheduler()
+	if err != nil {
+		return nil, nil, err
+	}
+	return asList(s["rules"]), asList(s["savedRules"]), nil
+}
+
+// ParentalAddRule adds a parental-control access window and returns its new id.
+func (c *Client) ParentalAddRule(a SchedulerRuleArgs) (int, error) {
+	return c.addSchedulerRule("/api/v1/parentalcontrol/scheduler", a)
+}
+
+// ParentalDelRule removes a parental-control access window by id.
+func (c *Client) ParentalDelRule(id int) error {
+	return c.delSchedulerRule("/api/v1/parentalcontrol/scheduler", id)
+}
+
+// ParentalHostSet enrols (enable=true) or releases (enable=false) a device from
+// parental control, keyed by MAC. Verified: PUT /parentalcontrol/hosts
+// {enable, macaddress}. This is the per-device switch the Bbox app exposes;
+// HostBlock/HostUnblock remain the coarse id-based helpers.
+func (c *Client) ParentalHostSet(mac string, enable bool) error {
+	code, data, _, err := c.Write("PUT", "/api/v1/parentalcontrol/hosts", map[string]any{
+		"enable":     boolInt(enable),
+		"macaddress": mac,
+	})
+	if err != nil {
+		return err
+	}
+	if code != 200 && code != 201 {
+		return fmt.Errorf("parental_host_set: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
+}
+
 // ─── WiFi ──────────────────────────────────────────────────────────────────
 
 func (c *Client) Wifi() (map[string]any, error) {
@@ -593,6 +670,143 @@ func (c *Client) WifiSchedulerOff() error {
 		return fmt.Errorf("wifi_scheduler_off: HTTP %d — %s", code, snippet(data))
 	}
 	return nil
+}
+
+// WifiSchedulerOn enables the wireless pause scheduler (the "WiFi pause" feature)
+// without touching the configured windows. Exact mirror of WifiSchedulerOff.
+func (c *Client) WifiSchedulerOn() error {
+	code, data, _, err := c.Write("PUT", "/api/v1/wireless/scheduler", map[string]any{"enable": 1})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("wifi_scheduler_on: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
+}
+
+// WifiACLToggle enables/disables WiFi MAC access-control filtering globally.
+// Mirrors the other resource-level toggles (UPnP/NAT/firewall): PUT {enable}.
+func (c *Client) WifiACLToggle(enable bool) error {
+	code, data, _, err := c.Write("PUT", "/api/v1/wireless/acl", map[string]any{"enable": boolInt(enable)})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("wifi_acl_toggle: HTTP %d — %s", code, snippet(data))
+	}
+	return nil
+}
+
+// WifiACLEnabled reports whether MAC access-control filtering is on.
+func (c *Client) WifiACLEnabled() (bool, error) {
+	acl, err := c.WifiACL()
+	if err != nil {
+		return false, err
+	}
+	return toBool(acl["enable"]), nil
+}
+
+// WifiACLRules returns the MAC access-control entries ([{id, enable, macaddress}]).
+func (c *Client) WifiACLRules() ([]any, error) {
+	acl, err := c.WifiACL()
+	if err != nil {
+		return nil, err
+	}
+	return asList(acl["rules"]), nil
+}
+
+// WifiACLAddRule adds a MAC to the access-control list and returns the new
+// router-assigned rule id. enable controls whether the entry is active.
+// Verified against firmware 25.3.20: POST /wireless/acl/rules → 201 + Location.
+func (c *Client) WifiACLAddRule(mac string, enable bool) (int, error) {
+	code, data, hdrs, err := c.Write("POST", "/api/v1/wireless/acl/rules", map[string]any{
+		"macaddress": mac,
+		"enable":     boolInt(enable),
+	})
+	if err != nil {
+		return 0, err
+	}
+	if code != 200 && code != 201 {
+		return 0, fmt.Errorf("wifi_acl_add_rule: HTTP %d — %s", code, snippet(data))
+	}
+	return locID(hdrs.Get("Location")), nil
+}
+
+// WifiACLDelRule removes an access-control entry by id.
+func (c *Client) WifiACLDelRule(id int) error {
+	code, data, _, err := c.Write("DELETE", fmt.Sprintf("/api/v1/wireless/acl/rules/%d", id), nil)
+	if err != nil {
+		return err
+	}
+	if code != 200 && code != 204 {
+		return fmt.Errorf("wifi_acl_del_rule(%d): HTTP %d — %s", id, code, snippet(data))
+	}
+	return nil
+}
+
+// SchedulerRuleArgs describes a scheduler "pause" window. The wireless-pause and
+// parental-control schedulers share this exact body shape (verified against the
+// admin-UI bundle + live firmware 25.3.20).
+type SchedulerRuleArgs struct {
+	Name      string // human label for the pause window
+	Occurency string // comma-separated day indices — Mon=1..Sat=6, Sun=0 (e.g. "1,2,3,4,5")
+	Intervals string // "HH:MM,HH:MM" — start,end (e.g. "22:00,07:00")
+	Enable    bool
+}
+
+// addSchedulerRule POSTs a pause window to a scheduler base path
+// (…/wireless/scheduler or …/parentalcontrol/scheduler) and returns the new id.
+func (c *Client) addSchedulerRule(base string, a SchedulerRuleArgs) (int, error) {
+	code, data, hdrs, err := c.Write("POST", base+"/rule", map[string]any{
+		"name":      a.Name,
+		"occurency": a.Occurency,
+		"intervals": a.Intervals,
+		"enable":    boolInt(a.Enable),
+	})
+	if err != nil {
+		return 0, err
+	}
+	if code != 200 && code != 201 {
+		return 0, fmt.Errorf("scheduler_add_rule: HTTP %d — %s", code, snippet(data))
+	}
+	return locID(hdrs.Get("Location")), nil
+}
+
+// delSchedulerRule removes a pause window by id from a scheduler base path.
+func (c *Client) delSchedulerRule(base string, id int) error {
+	code, data, _, err := c.Write("DELETE", fmt.Sprintf("%s/rule/%d", base, id), nil)
+	if err != nil {
+		return err
+	}
+	if code != 200 && code != 204 {
+		return fmt.Errorf("scheduler_del_rule(%d): HTTP %d — %s", id, code, snippet(data))
+	}
+	return nil
+}
+
+// WifiSchedulerRules returns the runtime and editable pause windows.
+// savedRules is the editable set — {id, enable, name, occurency, intervals} —
+// and is what you manage/delete by id. rules is a runtime-expanded timeline
+// (per day-crossing, id -1, name null, start/end objects) present only while the
+// scheduler is enabled; treat it as read-only. Adding an enabled window also
+// flips the scheduler's master enable on.
+func (c *Client) WifiSchedulerRules() (rules, savedRules []any, err error) {
+	s, err := c.WifiScheduler()
+	if err != nil {
+		return nil, nil, err
+	}
+	return asList(s["rules"]), asList(s["savedRules"]), nil
+}
+
+// WifiSchedulerAddRule adds a WiFi-pause window and returns its new id.
+func (c *Client) WifiSchedulerAddRule(a SchedulerRuleArgs) (int, error) {
+	return c.addSchedulerRule("/api/v1/wireless/scheduler", a)
+}
+
+// WifiSchedulerDelRule removes a WiFi-pause window by id.
+func (c *Client) WifiSchedulerDelRule(id int) error {
+	return c.delSchedulerRule("/api/v1/wireless/scheduler", id)
 }
 
 func (c *Client) WifiBandToggle(band string, enable bool) error {

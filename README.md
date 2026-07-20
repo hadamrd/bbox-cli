@@ -363,12 +363,51 @@ bbox nat add ssh 40960 192.168.1.42 --internal-port 22
 </details>
 
 <details>
-<summary><b>scheduler</b> — wireless power windows</summary>
+<summary><b>scheduler</b> — WiFi-pause windows</summary>
 
-| Command               | Description                                             |
-| --------------------- | ------------------------------------------------------- |
-| `bbox scheduler show` | Show scheduler state and entries.                       |
-| `bbox scheduler off`  | Disable the scheduler (leaves entries in place).        |
+Recurring windows during which the WiFi radios switch off ("WiFi pauses").
+
+| Command                                                            | Description                                              |
+| ----------------------------------------------------------------- | ------------------------------------------------------- |
+| `bbox scheduler show`                                             | Show scheduler state and pause windows.                 |
+| `bbox scheduler on`                                              | Enable the scheduler (activates the windows).           |
+| `bbox scheduler off`                                             | Disable the scheduler (leaves windows in place).        |
+| `bbox scheduler add --name N --days D --start HH:MM --end HH:MM` | Add a pause window. `--days`: mon..sun / weekdays / weekends / everyday. |
+| `bbox scheduler del ID`                                          | Remove a pause window by id.                            |
+
+```bash
+# WiFi off 23:30→06:30 on weeknights
+bbox scheduler add --name "School nights" --days weekdays --start 23:30 --end 06:30
+bbox scheduler on
+```
+
+Adding an enabled window turns the scheduler on automatically.
+
+</details>
+
+<details>
+<summary><b>wifi acl</b> — WiFi access control (MAC filtering)</summary>
+
+| Command                              | Description                                                    |
+| ------------------------------------ | -------------------------------------------------------------- |
+| `bbox wifi acl show`                 | Show MAC-filter state + entries.                               |
+| `bbox wifi acl toggle on\|off`       | Enable/disable enforcement. **Enabling can lock you out of WiFi** if the managing device isn't listed (wired access is unaffected). |
+| `bbox wifi acl add MAC [--enable=…]` | Add a MAC entry (default enabled).                             |
+| `bbox wifi acl del ID`               | Remove an entry by id.                                         |
+
+</details>
+
+<details>
+<summary><b>parental</b> — parental control (internet access windows)</summary>
+
+| Command                                                          | Description                                                       |
+| --------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `bbox parental show`                                            | Show state, default policy, and access windows.                  |
+| `bbox parental toggle on\|off`                                  | Enable/disable parental control.                                 |
+| `bbox parental policy forbid\|allow`                            | Default policy outside windows (`Forbidden` blocks, `Accept` allows). |
+| `bbox parental add --name N --days D --start HH:MM --end HH:MM` | Add an access window (same day/time syntax as `scheduler add`).   |
+| `bbox parental del ID`                                          | Remove an access window by id.                                   |
+| `bbox parental device MAC on\|off`                              | Enrol/release a device (by MAC) from parental control.           |
 
 </details>
 
